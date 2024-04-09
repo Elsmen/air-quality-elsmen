@@ -18,7 +18,7 @@ const int SENDADDRESS = 0XA1;   // address of radio to be sent to
 
 void reyaxSetup(String password);
 //void getGPS(float *latitude, float *longitude, float *altitude, int *satellites);
-void sendData(float partOneZero); //send particulates also
+void sendData(u16_t partOneZero); //send particulates
 void getdata();
 
 // Let Device OS manage the connection to the Particle Cloud
@@ -71,9 +71,9 @@ void getdata(){
 }
 
 // Send data to IoT Classroom LoRa basestation in format expected
-void sendData(float partOneZero) {
+void sendData(u16_t partOneZero) {
   char buffer[60];
-  sprintf(buffer, "AT+SEND=%i,Particule 1.0 = %f\n", SENDADDRESS,partOneZero);
+  sprintf(buffer, "AT+SEND=%i,60,%i\n", SENDADDRESS,partOneZero);
   Serial1.printf("%s",buffer);
   //Serial1.println(buffer); 
   delay(1000);

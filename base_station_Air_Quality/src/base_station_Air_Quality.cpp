@@ -34,12 +34,26 @@ void setup() {
 
 void loop() {
     
+<<<<<<< HEAD
+    if (Serial1.available())  { // full incoming buffer: +RCV=203,50,mydata,
+      Serial.printf("here i am ");
+      String parse0 = Serial1.readStringUntil('=');  //+RCV
+      String parse1 = Serial1.readStringUntil(',');  // address received from
+      String parse2 = Serial1.readStringUntil(',');  // buffer length
+      String parse3 = Serial1.readStringUntil('\n');  // data received from remote positions data[] for pm1.0
+      Serial.printf("parse3: %s\n", parse3.c_str());
+        //receiveTimer.startTimer(5000);
+        //sendData(myName, pmOneZero);
+
+    }
+=======
     if (Serial1.available())  { // full incoming buffer: +RCV=203,50,35.08,9,-36,41
       String parse1 = Serial1.readStringUntil(',');  // data received from remote positions data[] for pm1.0
       Serial.printf("parse1: %s\n", parse1.c_str());
         //receiveTimer.startTimer(5000);
         //sendData(myName, pmOneZero);
     }  
+>>>>>>> 836de5b426df2a7c02f855b79cf8d6c0ab1d2c00
 }
 
 // Configure and Initialize Reyax LoRa module
