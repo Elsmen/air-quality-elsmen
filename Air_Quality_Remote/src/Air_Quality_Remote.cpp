@@ -1,60 +1,114 @@
+/*
+ * Project L14_04_LoRaGPS
+ * Description: Starter Code for utilizing LoRa
+ * Author: Brian Rashap and Christian Chavez & Elsmen Aragon
+ * Date: 24-MAR-2023
+ */
+
+// NOTE: The Adafruit_GPS header file has been modified to work with the Particle environment DO NOT INSTALL Adafruit_GPS USE the library from 14_04
+
 #include "Particle.h"
+#include "Adafruit_GPS.h"
 #include "IoTTimer.h"
 #include "credentials.h"
+#include "Adafruit_BME280.h"
 
 #define SENSOR_ADDRESS 0x40 // Change this to the address obtained from the I2C scan
 
-byte data[29];
-int pm;
-String password = "AA4104132968BA2224299079021594AC"; // AES128 password
-String myName = "Borrowed";
-const int RADIOADDRESS = 0xA2; //it will be a value between 0xC1 - 0xCF can be anything i used 0XA1 BASE AND 0XA2 REMOTE
-const int TIMEZONE = -6;
+Adafruit_BME280 myReading; //Defining bme object mine is called myReading
+Adafruit_GPS GPS(&Wire);
 IoTTimer sampleTimer;// timer for led onboard
+// Define User and Credentials
+String password = "AA4104132968BA2224299079021594AB"; // AES128 password
+String myName = "borrowed";
 
 // Define Constants
+const int RADIOADDRESS = 0xA2; // it will be a value between 0xA1 and 0xA9 for my case
+const int TIMEZONE = -6;
+const unsigned int UPDATE = 10000;
 const int RADIONETWORK = 1;    // range of 0-16
 const int SENDADDRESS = 0xA1;   // address of radio to be sent to
 
-void reyaxSetup(String password);
-//void getGPS(float *latitude, float *longitude, float *altitude, int *satellites);
-void sendData(int partOneZero); //send particulates
-void getdata();
+//Delcare variable for air quality sensor
+byte data[29];
+int aqOne;
+int aqOneResult;
+const int AQTIMER = 10000;
 
-// Let Device OS manage the connection to the Particle Cloud
+// Declare Variables for gps
+float lat, lon, alt;
+int sat;
+unsigned int lastGPS;
+
+//Declare varibles for BME280
+const int HEXADDRESS = 0X76;
+bool status;
+float tempResult;
+
+// Declare Functions
+float getBme();
+int getAirQuality();
+void getGPS(float *latitude, float *longitude, float *altitude, int *satellites);
+void sendData(int latitude);
+void reyaxSetup(String password);
+
+
 SYSTEM_MODE(SEMI_AUTOMATIC);
 
 void setup() {
+  Serial.begin(9600);
+  waitFor(Serial.isConnected, 5000);
+  Serial1.begin(115200);
+  reyaxSetup(password);
+  //Initialize GPS
+  GPS.begin(0x10);  // The I2C address to use is 0x10 from I2C scan
+  GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
+  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ); 
+  GPS.sendCommand(PGCMD_ANTENNA);
+  delay(1000);
+  GPS.println(PMTK_Q_RELEASE);
 
-    Wire.begin();
-    Serial.begin(9600);
-    waitFor(Serial.isConnected, 5000);
-    Serial1.begin(115200);
-    reyaxSetup(password);
-
-    // Initialize I2C communication
-    Wire.beginTransmission(SENSOR_ADDRESS);
-    if (Wire.endTransmission() == 0) {
-        Serial.println("Sensor found at address 0x40");
-    } else {
-        Serial.println("No sensor found at address 0x40.");
-    }
-    sampleTimer.startTimer(10000);
-    Serial.printf("timer started");
+  // Initialize I2C communication for air Quality HM3301
+  Wire.beginTransmission(SENSOR_ADDRESS);
+  if (Wire.endTransmission() == 0) {
+    Serial.println("Sensor found at address 0x40");
+  } 
+  else {
+    Serial.println("No sensor found at address 0x40.");
+  }
+  //BME Check
+  status = myReading.begin(HEXADDRESS);
+  if ( status == false ) {
+    Serial.printf(" BME280 at address 0x%02x X failed to start ", HEXADDRESS );
+  }
+  //Timer for sample air quality + other data
+  sampleTimer.startTimer(AQTIMER);
 }
 
 void loop() {
-    // Request data from sensor
-    if(sampleTimer.isTimerReady()){
-      //getdata();
-      int gh = 8;
-      sendData(gh);
-      sampleTimer.startTimer(10000); 
-    }
-    
+  //Get data from GPS unit (best if you do this continuously) 
+  GPS.read();
+  if (GPS.newNMEAreceived()) {
+    if (!GPS.parse(GPS.lastNMEA())) {
+       return;
+    }   
+  }
+  if (millis() - lastGPS > UPDATE) {
+    lastGPS = millis(); // reset the timer
+    getGPS(&lat,&lon,&alt,&sat);
+    Serial.printf("\n=================================================================\n");
+    Serial.printf("Lat: %0.6f, Lon: %0.6f, Alt: %0.6f, Satellites: %i\n",lat, lon, alt, sat);
+    Serial.printf("=================================================================\n\n");
+  }
+  if(sampleTimer.isTimerReady()){
+    aqOneResult = getAirQuality();
+    Serial.printf("Lat: %0.6f, Lon: %0.6f, Alt: %0.6f, Satellites: %i\n",lat, lon, alt, sat);
+    tempResult = getBme();
+    sampleTimer.startTimer(AQTIMER);
+  }
 }
 
-void getdata(){
+int getAirQuality(){
   //Serial.printf("im here");
   Wire.requestFrom(SENSOR_ADDRESS, 29); // Request 29 bytes of data
   delay(100); // Allow time for sensor to respond
@@ -64,24 +118,50 @@ void getdata(){
     for (int i = 0; i < 29; i++) {
       data[i] = Wire.read();
     }
-    pm = data[5] | data[6];
-    //Serial.printf("pmOneZero = %i\n", pmOneZero);
+    aqOne = data[5] | data[6];
     Serial.printf("sensor# = %i\nPM 1.0 = %i\nPM 2.5 = %i\nPM c10 = %i\n", data [3] | data[4], data[5] | data[6], data[7] | data[8], data[11] | data[12]);
-    //delay(1000);
-    sendData(pm); 
-  }     
+    //sendData(pm);
+
+  }
+  return aqOne;     
+}
+// Get GPS data
+void getGPS(float *latitude, float *longitude, float *altitude, int *satellites) {
+  int theHour;
+  theHour = GPS.hour + TIMEZONE;
+  if (theHour < 0) {
+    theHour = theHour + 24;
+  }
+
+  Serial.printf("Time: %02i:%02i:%02i:%03i\n", theHour, GPS.minute, GPS.seconds, GPS.milliseconds);
+  Serial.printf("Dates: %02i-%02i-%02i\n", GPS.month, GPS.day, GPS.year);
+  Serial.printf("Fix: %i, Quality: %i", (int)GPS.fix, (int)GPS.fixquality);
+  if (GPS.fix) {
+    *latitude = GPS.latitudeDegrees;
+    *longitude = GPS.longitudeDegrees;
+    *altitude = GPS.altitude;
+    *satellites = (int)GPS.satellites;
+  
+  }
+}
+float getBme(){
+  float tempC, pressPA,humidRH, tempF, convertedPA;
+  tempC = myReading.readTemperature ();
+  pressPA = myReading.readPressure ();
+  convertedPA = pressPA*0.00029530;
+  humidRH = myReading.readHumidity ();
+  tempF = (tempC*9/5)+32;
+  return tempF;
 }
 
 // Send data to IoT Classroom LoRa basestation in format expected
-void sendData(int partOneZero) {
-  //Serial1.begin(115200);
-  Serial.printf(" data = %i\n", partOneZero);
+void sendData(int latitude) {
   char buffer[60];
-  sprintf(buffer, "AT+SEND=%i,60,%i\r\n", SENDADDRESS,partOneZero);
-  Serial.printf("im here%s\n",buffer);
-  Serial1.println(buffer); 
+  sprintf(buffer, "AT+SEND=%i,60,%i\r\n", SENDADDRESS, latitude);
+  Serial1.printf("%s",buffer);
+  //Serial1.println(buffer); 
   delay(1000);
-  if (Serial1.available() >= 0)
+  if (Serial1.available() > 0)
   {
     Serial.printf("Awaiting Reply from send\n");
     String reply = Serial1.readStringUntil('\n');
@@ -163,4 +243,3 @@ void reyaxSetup(String password) {
     Serial.printf("Radio Password: %s\n", reply.c_str());
   }
 }
-

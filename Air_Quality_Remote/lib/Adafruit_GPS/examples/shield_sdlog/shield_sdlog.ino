@@ -1,9 +1,6 @@
-#ifndef PARTICLE // needs library dependency on SdFat
+#include <SPI.h>
 #include <Adafruit_GPS.h>
-#if ARDUINO >= 100
- #include <SoftwareSerial.h>
- #include <SPI.h>
-#endif
+#include <SoftwareSerial.h>
 #include <SD.h>
 #include <avr/sleep.h>
 
@@ -20,12 +17,7 @@
 // Pick one up today at the Adafruit electronics shop
 // and help support open source hardware & software! -ada
 // Fllybob added 10 sec logging option
-#ifndef PARTICLE
 SoftwareSerial mySerial(8, 7);
-#else
-USARTSerial& mySerial = Serial1;
-#endif
-
 Adafruit_GPS GPS(&mySerial);
 
 // Set GPSECHO to 'false' to turn off echoing the GPS data to the Serial console
@@ -36,8 +28,9 @@ Adafruit_GPS GPS(&mySerial);
 
 // this keeps track of whether we're using the interrupt
 // off by default!
-boolean usingInterrupt = false;
-void useInterrupt(boolean); // Func prototype keeps Arduino 0023 happy
+#ifndef ESP8266 // Sadly not on ESP8266
+bool usingInterrupt = false;
+#endif
 
 // Set the pins used
 #define chipSelect 10
@@ -96,9 +89,7 @@ void setup() {
   // output, even if you don't use it:
   pinMode(10, OUTPUT);
 
-  // see if the card is present and can be initialized:
-  if (!SD.begin(chipSelect, 11, 12, 13)) {
-    //if (!SD.begin(chipSelect)) {      // if you're using an UNO, you can use this line instead
+  if (!SD.begin(chipSelect)) {
     Serial.println("Card init. failed!");
     error(2);
   }
@@ -140,51 +131,42 @@ void setup() {
   // the nice thing about this code is you can have a timer0 interrupt go off
   // every 1 millisecond, and read data from the GPS for you. that makes the
   // loop code a heck of a lot easier!
+#ifndef ESP8266 // Not on ESP8266
   useInterrupt(true);
+#endif
 
   Serial.println("Ready!");
 }
 
 
 // Interrupt is called once a millisecond, looks for any new GPS data, and stores it
-#ifndef PARTICLE
-SIGNAL(TIMER0_COMPA_vect) {
-#else
-void handleSysTick(void* data) {
-#endif
+#ifndef ESP8266 // Not on ESP8266
+ISR(TIMER0_COMPA_vect) {
   char c = GPS.read();
   // if you want to debug, this is a good time to do it!
-  if (GPSECHO && c) {
   #ifdef UDR0
-    UDR0 = c;
-    // writing direct to UDR0 is much much faster than Serial.print
-    // but only one character can be written at a time.
-  #else
-    Serial.write(c);
+      if (GPSECHO)
+        if (c) UDR0 = c;
+      // writing direct to UDR0 is much much faster than Serial.print
+      // but only one character can be written at a time.
   #endif
-  }
 }
 
-void useInterrupt(boolean v) {
-  #ifndef PARTICLE
+void useInterrupt(bool v) {
   if (v) {
     // Timer0 is already used for millis() - we'll just interrupt somewhere
     // in the middle and call the "Compare A" function above
     OCR0A = 0xAF;
     TIMSK0 |= _BV(OCIE0A);
     usingInterrupt = true;
-  } else {
+  }
+  else {
     // do not call the interrupt function COMPA anymore
     TIMSK0 &= ~_BV(OCIE0A);
     usingInterrupt = false;
   }
-  #else
-    static HAL_InterruptCallback callback;
-    static HAL_InterruptCallback previous;
-    callback.handler = handleSysTick;
-    HAL_Set_System_Interrupt_Handler(SysInterrupt_SysTick, &callback, &previous, nullptr);
-  #endif
 }
+#endif // ESP8266
 
 void loop() {
   if (! usingInterrupt) {
@@ -226,7 +208,3 @@ void loop() {
     Serial.println();
   }
 }
-
-
-/* End code */
-#endif

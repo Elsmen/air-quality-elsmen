@@ -3,7 +3,7 @@
 
 byte data[100];
 uint16_t pmOneZero;
-String password = "AA4104132968BA2224299079021594AC"; // AES128 password
+String password = "AA4104132968BA2224299079021594AB"; // AES128 password
 String myName = "Thor2";
 const int RADIOADDRESS = 0xA1; // Get address from Instructor, it will be a value between 0xC1 - 0xCF can be anything though up to 255
 const int TIMEZONE = -6;
@@ -39,9 +39,7 @@ void loop() {
       String parse2 = Serial1.readStringUntil(',');  // buffer length
       String parse3 = Serial1.readStringUntil('\n');  // data received from remote positions data[] for pm1.0
       Serial.printf("parse3: %s\n", parse3.c_str());
-        //receiveTimer.startTimer(5000);
-        //sendData(myName, pmOneZero);
-
+        
     }
 }
 
