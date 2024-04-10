@@ -11,7 +11,7 @@ IoTTimer receiveTimer;// timer for led onboard
 
 // Define Constants
 const int RADIONETWORK = 1;    // range of 0-16
-const int SENDADDRESS = 0XA2;   // address of radio to be sent to
+const int SENDADDRESS = 0xA2;   // address of radio to be sent to
 
 void reyaxSetup(String password);
 //void getGPS(float *latitude, float *longitude, float *altitude, int *satellites);
@@ -28,13 +28,10 @@ void setup() {
     Serial1.begin(115200);
     delay(5000);
     reyaxSetup(password);
-
-
 }
 
 void loop() {
     
-<<<<<<< HEAD
     if (Serial1.available())  { // full incoming buffer: +RCV=203,50,mydata,
       Serial.printf("here i am ");
       String parse0 = Serial1.readStringUntil('=');  //+RCV
@@ -46,14 +43,6 @@ void loop() {
         //sendData(myName, pmOneZero);
 
     }
-=======
-    if (Serial1.available())  { // full incoming buffer: +RCV=203,50,35.08,9,-36,41
-      String parse1 = Serial1.readStringUntil(',');  // data received from remote positions data[] for pm1.0
-      Serial.printf("parse1: %s\n", parse1.c_str());
-        //receiveTimer.startTimer(5000);
-        //sendData(myName, pmOneZero);
-    }  
->>>>>>> 836de5b426df2a7c02f855b79cf8d6c0ab1d2c00
 }
 
 // Configure and Initialize Reyax LoRa module

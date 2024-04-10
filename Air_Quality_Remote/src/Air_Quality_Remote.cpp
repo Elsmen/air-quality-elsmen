@@ -5,7 +5,7 @@
 #define SENSOR_ADDRESS 0x40 // Change this to the address obtained from the I2C scan
 
 byte data[29];
-uint16_t pmOneZero;
+int pm;
 String password = "AA4104132968BA2224299079021594AC"; // AES128 password
 String myName = "Borrowed";
 const int RADIOADDRESS = 0xA2; //it will be a value between 0xC1 - 0xCF can be anything i used 0XA1 BASE AND 0XA2 REMOTE
@@ -14,11 +14,11 @@ IoTTimer sampleTimer;// timer for led onboard
 
 // Define Constants
 const int RADIONETWORK = 1;    // range of 0-16
-const int SENDADDRESS = 0XA1;   // address of radio to be sent to
+const int SENDADDRESS = 0xA1;   // address of radio to be sent to
 
 void reyaxSetup(String password);
 //void getGPS(float *latitude, float *longitude, float *altitude, int *satellites);
-void sendData(u16_t partOneZero); //send particulates
+void sendData(int partOneZero); //send particulates
 void getdata();
 
 // Let Device OS manage the connection to the Particle Cloud
@@ -28,7 +28,7 @@ void setup() {
 
     Wire.begin();
     Serial.begin(9600);
-    waitFor(Serial.isConnected, 1000);
+    waitFor(Serial.isConnected, 5000);
     Serial1.begin(115200);
     reyaxSetup(password);
 
@@ -46,7 +46,9 @@ void setup() {
 void loop() {
     // Request data from sensor
     if(sampleTimer.isTimerReady()){
-      getdata();
+      //getdata();
+      int gh = 8;
+      sendData(gh);
       sampleTimer.startTimer(10000); 
     }
     
@@ -62,22 +64,24 @@ void getdata(){
     for (int i = 0; i < 29; i++) {
       data[i] = Wire.read();
     }
-    pmOneZero = data[5] | data[6];
+    pm = data[5] | data[6];
     //Serial.printf("pmOneZero = %i\n", pmOneZero);
     Serial.printf("sensor# = %i\nPM 1.0 = %i\nPM 2.5 = %i\nPM c10 = %i\n", data [3] | data[4], data[5] | data[6], data[7] | data[8], data[11] | data[12]);
-    delay(1000);
-    sendData(pmOneZero); 
+    //delay(1000);
+    sendData(pm); 
   }     
 }
 
 // Send data to IoT Classroom LoRa basestation in format expected
-void sendData(u16_t partOneZero) {
+void sendData(int partOneZero) {
+  //Serial1.begin(115200);
+  Serial.printf(" data = %i\n", partOneZero);
   char buffer[60];
-  sprintf(buffer, "AT+SEND=%i,60,%i\n", SENDADDRESS,partOneZero);
-  Serial1.printf("%s",buffer);
-  //Serial1.println(buffer); 
+  sprintf(buffer, "AT+SEND=%i,60,%i\r\n", SENDADDRESS,partOneZero);
+  Serial.printf("im here%s\n",buffer);
+  Serial1.println(buffer); 
   delay(1000);
-  if (Serial1.available() > 0)
+  if (Serial1.available() >= 0)
   {
     Serial.printf("Awaiting Reply from send\n");
     String reply = Serial1.readStringUntil('\n');
