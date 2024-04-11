@@ -25,7 +25,7 @@ String myName = "borrowed";
 // Define Constants
 const int RADIOADDRESS = 0xA2; // it will be a value between 0xA1 and 0xA9 for my case
 const int TIMEZONE = -6;
-const unsigned int UPDATE = 10000;
+const unsigned int UPDATEGPS = 5000;
 const int RADIONETWORK = 1;    // range of 0-16
 const int SENDADDRESS = 0xA1;   // address of radio to be sent to
 
@@ -33,7 +33,7 @@ const int SENDADDRESS = 0xA1;   // address of radio to be sent to
 byte data[29];
 int aqOne;
 int aqOneResult;
-const int AQTIMER = 10000;
+const int AQTIMER = 30000;
 
 // Declare Variables for gps
 float lat, lon, alt;
@@ -93,7 +93,7 @@ void loop() {
        return;
     }   
   }
-  if (millis() - lastGPS > UPDATE) {
+  if (millis() - lastGPS > UPDATEGPS) {
     lastGPS = millis(); // reset the timer
     getGPS(&lat,&lon,&alt,&sat);
     Serial.printf("\n=================================================================\n");
