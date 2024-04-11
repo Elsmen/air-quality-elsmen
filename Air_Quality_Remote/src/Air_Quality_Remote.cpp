@@ -49,7 +49,7 @@ float tempResult;
 float getBme();
 int getAirQuality();
 void getGPS(float *latitude, float *longitude, float *altitude, int *satellites);
-void sendData(int latitude);
+void sendData(float temp, int aq, float latt);
 void reyaxSetup(String password);
 
 
@@ -104,7 +104,9 @@ void loop() {
     aqOneResult = getAirQuality();
     Serial.printf("Lat: %0.6f, Lon: %0.6f, Alt: %0.6f, Satellites: %i\n",lat, lon, alt, sat);
     tempResult = getBme();
+    Serial.printf("TempF = %02f\n", tempResult);
     sampleTimer.startTimer(AQTIMER);
+    sendData(tempResult, aqOneResult, lat);
   }
 }
 
@@ -120,8 +122,6 @@ int getAirQuality(){
     }
     aqOne = data[5] | data[6];
     Serial.printf("sensor# = %i\nPM 1.0 = %i\nPM 2.5 = %i\nPM c10 = %i\n", data [3] | data[4], data[5] | data[6], data[7] | data[8], data[11] | data[12]);
-    //sendData(pm);
-
   }
   return aqOne;     
 }
@@ -153,11 +153,10 @@ float getBme(){
   tempF = (tempC*9/5)+32;
   return tempF;
 }
-
 // Send data to IoT Classroom LoRa basestation in format expected
-void sendData(int latitude) {
+void sendData(float temp, int aq, float latt) {
   char buffer[60];
-  sprintf(buffer, "AT+SEND=%i,60,%i\r\n", SENDADDRESS, latitude);
+  sprintf(buffer, "AT+SEND=%i,60,%0.2f,%i,%0.2f\r\n", SENDADDRESS, temp, aq, latt);
   Serial1.printf("%s",buffer);
   //Serial1.println(buffer); 
   delay(1000);
