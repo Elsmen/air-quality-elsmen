@@ -31,9 +31,10 @@ const int SENDADDRESS = 0xA1;   // address of radio to be sent to
 
 //Delcare variable for air quality sensor
 byte data[29];
-int aqOne;
-int aqOneResult;
-const int AQTIMER = 30000;
+//int aqOne;
+//int aqOneResult;
+const int AQTIMER = 5000;
+int aq, aq2, aq10;
 
 // Declare Variables for gps
 float lat, lon, alt;
@@ -43,13 +44,14 @@ unsigned int lastGPS;
 //Declare varibles for BME280
 const int HEXADDRESS = 0X76;
 bool status;
-float tempResult;
+float temperature, humidity;
 
 // Declare Functions
-float getBme();
-int getAirQuality();
+void getBme(float *temperature, float *humidity);
+void getAirQuality(int *aq, int *aq2, int *aq10);
+//int getAirQuality();
 void getGPS(float *latitude, float *longitude, float *altitude, int *satellites);
-void sendData(float temp, int aq, float latt);
+void sendData(float temp, int aq, float latt, float lonn, float altt, float humidd, int aq2, int aq10);
 void reyaxSetup(String password);
 
 
@@ -101,16 +103,19 @@ void loop() {
     Serial.printf("=================================================================\n\n");
   }
   if(sampleTimer.isTimerReady()){
-    aqOneResult = getAirQuality();
+    getAirQuality(&aq, &aq2, &aq10);
+    //aqOneResult = getAirQuality();
     Serial.printf("Lat: %0.6f, Lon: %0.6f, Alt: %0.6f, Satellites: %i\n",lat, lon, alt, sat);
-    tempResult = getBme();
-    Serial.printf("TempF = %02f\n", tempResult);
+    getBme(&temperature, &humidity);
+    Serial.printf("Humidity: %.2f%%\nTempF: %.2f\n", humidity, temperature);
+    //tempResult = getBme();
+    //Serial.printf("TempF = %02f\n", tempResult);
     sampleTimer.startTimer(AQTIMER);
-    sendData(tempResult, aqOneResult, lat);
+    sendData(temperature, aq, lat, lon, alt, humidity, aq2, aq10);
   }
 }
 
-int getAirQuality(){
+void getAirQuality(int *aq, int *aq2, int *aq10){
   //Serial.printf("im here");
   Wire.requestFrom(SENSOR_ADDRESS, 29); // Request 29 bytes of data
   delay(100); // Allow time for sensor to respond
@@ -120,10 +125,11 @@ int getAirQuality(){
     for (int i = 0; i < 29; i++) {
       data[i] = Wire.read();
     }
-    aqOne = data[5] | data[6];
+    *aq = data[5] | data[6];
+    *aq2 = data[7] | data[8];
+    *aq10 = data[11] | data[12];
     Serial.printf("sensor# = %i\nPM 1.0 = %i\nPM 2.5 = %i\nPM c10 = %i\n", data [3] | data[4], data[5] | data[6], data[7] | data[8], data[11] | data[12]);
-  }
-  return aqOne;     
+  }     
 }
 // Get GPS data
 void getGPS(float *latitude, float *longitude, float *altitude, int *satellites) {
@@ -144,20 +150,22 @@ void getGPS(float *latitude, float *longitude, float *altitude, int *satellites)
   
   }
 }
-float getBme(){
-  float tempC, pressPA,humidRH, tempF, convertedPA;
+void getBme(float *temperature, float *humidity){
+  float tempC, pressPA, humidRH, tempF, convertedPA;
   tempC = myReading.readTemperature ();
   pressPA = myReading.readPressure ();
   convertedPA = pressPA*0.00029530;
   humidRH = myReading.readHumidity ();
+  *humidity = humidRH;
   tempF = (tempC*9/5)+32;
-  return tempF;
+  *temperature = tempF;
 }
 // Send data to IoT Classroom LoRa basestation in format expected
-void sendData(float temp, int aq, float latt) {
+void sendData(float temp, int aq, float latt, float lonn, float altt, float humidd, int aq2, int aq10) {
   char buffer[60];
-  sprintf(buffer, "AT+SEND=%i,60,%0.2f,%i,%0.2f\r\n", SENDADDRESS, temp, aq, latt);
+  sprintf(buffer, "AT+SEND=%i,60,%0.2f,%i,%0.6f,%0.6f,%0.6f,%0.2f,%i,%i\r\n", SENDADDRESS, temp, aq, latt, lonn, altt, humidd, aq2, aq10);
   Serial1.printf("%s",buffer);
+  Serial.printf("buff: %s", buffer);
   //Serial1.println(buffer); 
   delay(1000);
   if (Serial1.available() > 0)

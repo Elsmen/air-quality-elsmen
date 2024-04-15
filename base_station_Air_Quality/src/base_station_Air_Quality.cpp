@@ -1,4 +1,9 @@
 #include "Particle.h"
+#include <Adafruit_MQTT.h>
+#include "Adafruit_MQTT/Adafruit_MQTT_SPARK.h"
+#include "Adafruit_MQTT/Adafruit_MQTT.h"
+#include "credentials.h"
+#include <JsonParserGeneratorRK.h>
 //#include "IoTTimer.h"
 
 
@@ -6,16 +11,39 @@ String password = "AA4104132968BA2224299079021594AB"; // AES128 password
 String myName = "Thor2";
 const int RADIOADDRESS = 0xA1; // It will be a value between 0xC1 - 0xCF can be anything though up to 255
 const int TIMEZONE = -6;
+unsigned int last, lastTime;
 
 // Define Constants
 const int RADIONETWORK = 1;    // range of 0-16
 const int SENDADDRESS = 0xA2;   // address of radio to be sent to if I send back to another LoRa device
 
 void reyaxSetup(String password);
-void sleepULP();
+//void sleepULP();
 
-// Let Device OS manage the connection to the Particle Cloud
-SYSTEM_MODE(SEMI_AUTOMATIC);
+/************ Global State (you don't need to change this!) ***   ***************/ 
+TCPClient TheClient; 
+
+// Setup the MQTT client class by passing in the WiFi client and MQTT server and login details. 
+Adafruit_MQTT_SPARK mqtt(&TheClient,AIO_SERVER,AIO_SERVERPORT,AIO_USERNAME,AIO_KEY); 
+// Setup Feeds to publish or subscribe 
+// Notice MQTT paths for AIO follow the form: <username>/feeds/<feedname> 
+Adafruit_MQTT_Publish tempDrone = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/capTemp");
+Adafruit_MQTT_Publish humidityDrone = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/capHumidity");
+Adafruit_MQTT_Publish airOneDrone = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/capAirOne");
+Adafruit_MQTT_Publish airTwoDrone= Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/capAirTwo");
+Adafruit_MQTT_Publish airTenDrone = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/capAirTen");
+Adafruit_MQTT_Publish gpsDrone = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/capGPS");
+
+
+/************Declare Functions*************/
+void MQTT_connect();
+bool MQTT_ping();
+
+//Declare function for json collector
+void createEventPayLoad (float lat, float lon, float alt);
+
+// Let Device OS manage the connection to the Particle Cloud comment out or put in manual when connecting to mqtt
+//SYSTEM_MODE(AUTOMATIC);
 
 void setup() {
 
@@ -25,36 +53,97 @@ void setup() {
     Serial1.begin(115200);
     delay(5000);
     reyaxSetup(password);
+
+    WiFi.on();
+    WiFi.connect();
+    while(WiFi.connecting()) {
+      Serial.printf(".");
+    }
+    Serial.printf("\n\n");
 }
 
 void loop() {
+  MQTT_connect();
+  MQTT_ping();
   
   if (Serial1.available())  { // full incoming buffer: +RCV=203,50,mydata,
-    Serial.printf("here i am ");
+    //Serial.printf("here i am ");
     String parse0 = Serial1.readStringUntil('=');  //+RCV
-    String parse1 = Serial1.readStringUntil(',');  // address received from
+    String parse1 = Serial1.readStringUntil(',');  // address received from device
     String parse2 = Serial1.readStringUntil(',');  // buffer length
     String parse3 = Serial1.readStringUntil(',');  // data received from remote Temf
     String parse4 = Serial1.readStringUntil(',');  // data received from remote Air Quality PM1.0
-    String parse5 = Serial1.readStringUntil('\n');  // data received from remote Latitude
-    Serial.printf("TempF: %s\nAir Quality: %s\nLatitude: %s", parse3.c_str(), parse4.c_str(), parse5.c_str());
+    String parse5 = Serial1.readStringUntil(',');  // data received from remote Latitude
+    String parse6 = Serial1.readStringUntil(',');  // data received from remote Longitude
+    String parse7 = Serial1.readStringUntil(',');  // data received from remote altutude
+    String parse8 = Serial1.readStringUntil(','); // data received from humidity
+    String parse9 = Serial1.readStringUntil(',');  // data received from remote Air Quality PM2.5
+    String parse10 = Serial1.readStringUntil('n');  // data received from remote Air Quality PM10.0
+
+
+    if (parse3.length() > 0 && parse4.length() > 0 && parse5.length() > 0) {
+        // Print only if all parsed variables contain data
+      Serial.printf("TempF: %s\nAir Quality1: %s\nLatitude: %s\nLongitude: %s\nAltutude: %s\nAQ2: %s\nAQten: %s\n", parse3.c_str(), parse4.c_str(), parse5.c_str(), parse6.c_str(), parse7.c_str(), parse8.c_str(), parse9.c_str(), parse10.c_str());
+      createEventPayLoad (atof((char *)parse5.c_str()), atof((char *)parse6.c_str()), atof((char *)parse7.c_str())); //json package for GPS
+      if(mqtt.Update()) {
+        tempDrone.publish(atof((char *)parse3.c_str()));
+        airOneDrone.publish(atof((char *)parse4.c_str()));
+        airTwoDrone.publish(atof((char *)parse9.c_str()));
+        airTenDrone.publish(atof((char *)parse10.c_str()));
+        humidityDrone.publish(atof((char *)parse8.c_str()));
+        //Serial.printf("Publishing %0.2f \n",atof((char *)parse3.c_str())); 
+      } 
+      lastTime = millis();
+    }
   }
-  sleepULP();
+  //sleepULP(); apparently this is not supported by the Photon2 on serial comm
+}
+  
+void MQTT_connect() {
+  int8_t ret;
+ 
+  // Return if already connected.
+  if (mqtt.connected()) {
+    return;
+  }
+ 
+  Serial.print("Connecting to MQTT... ");
+ 
+  while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
+       Serial.printf("Error Code %s\n",mqtt.connectErrorString(ret));
+       Serial.printf("Retrying MQTT connection in 5 seconds...\n");
+       mqtt.disconnect();
+       delay(5000);  // wait 5 seconds and try again
+  }
+  Serial.printf("MQTT Connected!\n");
 }
 
-void sleepULP() {
-  SystemSleepConfiguration config ;
-  config.mode(SystemSleepMode :: ULTRA_LOW_POWER).usart(Serial1);
-  //config.mode (SystemSleepMode :: ULTRA_LOW_POWER).gpio(D0, RISING ).duration( sleepDuration );
-  SystemSleepResult result = System.sleep (config) ;
-  delay (1000) ;
-  if (result.wakeupReason() == SystemSleepWakeupReason:: BY_USART) {
-    Serial.printf (" Awakened by Serial1 %i\n", result.wakeupPin() );
+bool MQTT_ping() {
+  static unsigned int last;
+  bool pingStatus;
+
+  if ((millis()-last)>120000) {
+      Serial.printf("Pinging MQTT \n");
+      pingStatus = mqtt.ping();
+      if(!pingStatus) {
+        Serial.printf("Disconnecting \n");
+        mqtt.disconnect();
+      }
+      last = millis();
   }
-  if (result.wakeupReason() == SystemSleepWakeupReason:: BY_RTC ) {
-    Serial.printf (" Awakened by RTC \n");
+  return pingStatus;
+}
+void createEventPayLoad (float lat, float lon, float alt) {
+  JsonWriterStatic <256> jw ;{
+    JsonWriterAutoObject obj (&jw);
+    jw.insertKeyValue ("lat", lat);
+    jw.insertKeyValue ("lon", lon);
+    jw.insertKeyValue ("alt", alt);
   }
-}  
+  if (mqtt.Update()) {
+    gpsDrone.publish(jw.getBuffer());
+  }
+}
 
 // Configure and Initialize Reyax LoRa module
 void reyaxSetup(String password) {
@@ -131,3 +220,18 @@ void reyaxSetup(String password) {
   }
 }
 
+
+// tried using with photon 2 but does not work with a wake up from serial1 from LoRa
+// void sleepULP() {
+//   SystemSleepConfiguration config;
+//   config.mode(SystemSleepMode :: ULTRA_LOW_POWER).usart(Serial1).duration(120000);
+//   //config.mode (SystemSleepMode :: ULTRA_LOW_POWER).gpio(D0, RISING ).duration( sleepDuration );
+//   SystemSleepResult result = System.sleep (config);
+//   delay (1000) ;
+//   if (result.wakeupReason() == SystemSleepWakeupReason:: BY_USART) {
+//     Serial.printf (" Awakened by Serial1 %i\n", result.wakeupPin() );
+//   }
+//   if (result.wakeupReason() == SystemSleepWakeupReason:: BY_RTC ) {
+//     Serial.printf (" Awakened by RTC \n");
+//   }
+//}  
