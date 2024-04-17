@@ -165,7 +165,7 @@ void sendData(float temp, int aq, float latt, float lonn, float altt, float humi
   char buffer[60];
   sprintf(buffer, "AT+SEND=%i,60,%0.2f,%i,%0.6f,%0.6f,%0.6f,%0.2f,%i,%i\r\n", SENDADDRESS, temp, aq, latt, lonn, altt, humidd, aq2, aq10);
   Serial1.printf("%s",buffer);
-  Serial.printf("buff: %s", buffer);
+  //Serial.printf("buff: %s", buffer);
   //Serial1.println(buffer); 
   delay(1000);
   if (Serial1.available() > 0)

@@ -4,7 +4,7 @@
 #include "Adafruit_MQTT/Adafruit_MQTT.h"
 #include "credentials.h"
 #include <JsonParserGeneratorRK.h>
-//#include "IoTTimer.h"
+#include "IoTTimer.h"
 
 
 String password = "AA4104132968BA2224299079021594AB"; // AES128 password
@@ -12,6 +12,8 @@ String myName = "Thor2";
 const int RADIOADDRESS = 0xA1; // It will be a value between 0xC1 - 0xCF can be anything though up to 255
 const int TIMEZONE = -6;
 unsigned int last, lastTime;
+IoTTimer publishTimer;
+const int PUBTIME = 12000;
 
 // Define Constants
 const int RADIONETWORK = 1;    // range of 0-16
@@ -60,6 +62,7 @@ void setup() {
       Serial.printf(".");
     }
     Serial.printf("\n\n");
+    publishTimer.startTimer(PUBTIME);
 }
 
 void loop() {
@@ -71,7 +74,7 @@ void loop() {
     String parse0 = Serial1.readStringUntil('=');  //+RCV
     String parse1 = Serial1.readStringUntil(',');  // address received from device
     String parse2 = Serial1.readStringUntil(',');  // buffer length
-    String parse3 = Serial1.readStringUntil(',');  // data received from remote Temf
+    String parse3 = Serial1.readStringUntil(',');  // data received from remote Tempf
     String parse4 = Serial1.readStringUntil(',');  // data received from remote Air Quality PM1.0
     String parse5 = Serial1.readStringUntil(',');  // data received from remote Latitude
     String parse6 = Serial1.readStringUntil(',');  // data received from remote Longitude
@@ -80,7 +83,7 @@ void loop() {
     String parse9 = Serial1.readStringUntil(',');  // data received from remote Air Quality PM2.5
     String parse10 = Serial1.readStringUntil('n');  // data received from remote Air Quality PM10.0
 
-
+    if(publishTimer.isTimerReady()) {
     if (parse3.length() > 0 && parse4.length() > 0 && parse5.length() > 0) {
         // Print only if all parsed variables contain data
       Serial.printf("TempF: %s\nAir Quality1: %s\nLatitude: %s\nLongitude: %s\nAltutude: %s\nAQ2: %s\nAQten: %s\n", parse3.c_str(), parse4.c_str(), parse5.c_str(), parse6.c_str(), parse7.c_str(), parse8.c_str(), parse9.c_str(), parse10.c_str());
@@ -92,7 +95,9 @@ void loop() {
         airTenDrone.publish(atof((char *)parse10.c_str()));
         humidityDrone.publish(atof((char *)parse8.c_str()));
         //Serial.printf("Publishing %0.2f \n",atof((char *)parse3.c_str())); 
-      } 
+      }
+    }
+      publishTimer.startTimer(PUBTIME); 
       lastTime = millis();
     }
   }
